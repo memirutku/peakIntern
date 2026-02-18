@@ -1,0 +1,82 @@
+# =============================================================================
+# .dockerignore - Docker build context'inden hariç tutulacak dosyalar
+# =============================================================================
+#
+# NE İŞE YARAR?
+# -------------
+# Docker image build ederken, tüm dosyalar "build context" olarak Docker
+# daemon'a gönderilir. Bu dosya, gereksiz dosyaların gönderilmesini engeller.
+#
+# NE ZAMAN ÖNEMLİ?
+# ----------------
+# 1. Büyük dosyalar varsa (node_modules, .git, veri dosyaları)
+#    → Build context gönderimi yavaşlar
+#
+# 2. COPY . . kullanılıyorsa
+#    → Gereksiz dosyalar image'a kopyalanır, boyut artar
+#
+# 3. Gizli dosyalar varsa (.env, credentials)
+#    → Yanlışlıkla image'a dahil olabilir (GÜVENLİK RİSKİ!)
+#
+# 4. CI/CD pipeline'larında
+#    → Her build'de gereksiz dosya transferi = yavaş pipeline
+#
+# BU PROJEDE
+# ----------
+# Dockerfile'da sadece belirli dosyalar kopyalanıyor:
+#   COPY requirements.txt .
+#   COPY app.py .
+#
+# Bu yüzden .dockerignore kritik değil ama best practice olarak eklendi.
+# Gelecekte COPY . . kullanılırsa koruma sağlar.
+#
+# =============================================================================
+
+# Python bytecode ve cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env
+
+# IDE ve editör dosyaları
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Test ve coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation
+*.md
+docs/
+
+# OS dosyaları
+.DS_Store
+Thumbs.db
+
+# Log dosyaları
+*.log
+logs/
+
+# Geçici dosyalar
+tmp/
+temp/
+*.tmp
