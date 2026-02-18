@@ -2,7 +2,7 @@
 
 This repository contains my implementation of a **local, AI-driven configuration management system** that allows users to modify application configuration values using **natural language**.
 
-It was originally built as an internship project and is now published publicly to showcase my experience with **Python microservices**, **Docker**, **local LLMs (Ollama)**, and **schema‑driven configuration management**.
+This project was originally implemented as a **case assignment for an internship application at Peak Games**, and is now published publicly to showcase my experience with **Python microservices**, **Docker**, **local LLMs (Ollama)**, and **schema‑driven configuration management**.
 
 Instead of manually editing JSON files, users can send plain-English requests such as:
 
