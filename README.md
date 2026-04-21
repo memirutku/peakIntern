@@ -1,67 +1,107 @@
-# AI-Assisted Application Configuration Tool
+<div align="center">
 
-This repository contains my implementation of a **local, AI-driven configuration management system** that allows users to modify application configuration values using **natural language**.
+<a id="top"></a>
 
-This project was originally implemented as a **case assignment for an internship application at Peak Games**, and is now published publicly to showcase my experience with **Python microservices**, **Docker**, **local LLMs (Ollama)**, and **schema‑driven configuration management**.
+# AI-Assisted Application Configuration
 
-Instead of manually editing JSON files, users can send plain-English requests such as:
+**Dil &nbsp;·&nbsp; Language:** [**English**](#english) &nbsp;|&nbsp; [**Türkçe**](#turkce)
+
+[![](https://img.shields.io/badge/stack-Flask-0d1117?logo=flask)](https://flask.palletsprojects.com/) [![](https://img.shields.io/badge/LLM-Ollama-0d1117?logo=ollama)](https://ollama.com/) [![](https://img.shields.io/badge/orchestration-Docker%20Compose-0d1117?logo=docker)](https://docs.docker.com/compose/) [![](https://img.shields.io/badge/validation-JSON%20Schema-0d1117)](https://json-schema.org/)
+
+**Repo:** [github.com/memirutku/peakIntern](https://github.com/memirutku/peakIntern)
+
+</div>
+
+---
+
+<a id="english"></a>
+
+## English
+
+**Natural language → validated config updates.** A small **Python microservice** stack that maps plain-English instructions to changes in JSON configuration, with **JSON Schema** validation and a **local LLM via Ollama** (no cloud models).
+
+Originally built as a **case assignment for a Peak Games internship application**; published to demonstrate work with **Flask**, **Docker Compose**, **Ollama**, and **schema-driven configuration**.
+
+---
+
+### What you can ask for
+
+Examples the bot understands:
 
 - “set tournament service memory to 1024mb”
 - “set GAME_NAME env to toyblast for matchmaking service”
 - “lower cpu limit of chat service to %80”
 
-The system understands the request, determines **which application is being referenced**, validates changes against the **application’s JSON Schema**, updates the **current values JSON**, and returns the modified configuration.
+The **bot** infers which app (`chat`, `tournament`, `matchmaking`) you mean, loads that app’s **schema** and **current values**, asks the LLM for an updated values document, validates it against the schema, and returns the result.
 
 ---
 
-## Skills & Technologies Demonstrated
+### Stack (short)
 
-- **Backend & APIs**
-  - Python + Flask services (`schema-server`, `values-server`, `bot-server`)
-  - Clear separation of responsibilities between microservices
-- **LLM / AI Integration**
-  - Running a **local** LLM via **Ollama** (no cloud LLMs)
-  - Prompt design for: app identification → config update generation
-  - Handling malformed LLM output with retries and strict JSON Schema validation
-- **Configuration & JSON Schema**
-  - Designing and using JSON Schemas to validate configuration
-  - Safely updating nested JSON while preserving unrelated fields
-- **DevOps & Containerization**
-  - Dockerizing each service with dedicated `Dockerfile`
-  - Orchestrating services via `docker-compose.yml`
-  - Using an internal Docker network for service‑to‑service communication
-- **Reliability & Observability**
-  - Structured, traceable logging with per‑request IDs
-  - Health checks for services and dependencies (Ollama, schema, values)
-  - Input validation and safe error handling
+| Area        | Choices                                                         |
+| ----------- | --------------------------------------------------------------- |
+| Services    | Flask apps: `schema-server`, `values-server`, `bot-server`   |
+| LLM         | Local **Ollama**; model configurable (default `llama3.2`)      |
+| Validation  | **jsonschema** on LLM output                                    |
+| Ops         | Docker per service, internal Docker network, `restart: unless-stopped` |
+| Quality     | Per-request logging, health endpoints, retries on bad LLM output |
 
-These pieces together demonstrate my ability to design, implement and operate a small but realistic **AI‑assisted backend system** end‑to‑end.
+For **model choice, prompts, and trade-offs**, see [`INTERN.md`](./INTERN.md).
 
 ---
 
-## Quick Start
+### Architecture
 
-### Prerequisites
+Three services, one responsibility each:
 
-- **Docker** and **Docker Compose**
-- **Ollama** running on your machine
-- An LLM model pulled in Ollama (for example: `ollama pull llama3.2`)
+| Service           | Role                                                                         |
+| ----------------- | ---------------------------------------------------------------------------- |
+| **schema-server** | Serves JSON Schema per `app_name` (`GET /{app_name}`)                        |
+| **values-server** | Serves current values JSON per `app_name` (`GET /{app_name}`)               |
+| **bot-server**    | Public API: NL in → validated updated JSON out (`POST /message`)            |
 
-### Run the system
+Only **bot-server** exposes a host port (**5003**). Schema and values are reached from the bot over the Compose network.
+
+---
+
+### Request flow
+
+1. Client posts `{ "input": "…" }` to **bot-server** `POST /message`.
+2. Bot calls Ollama to determine the **target application name**.
+3. Bot fetches **schema** and **values** from the other two services.
+4. Bot calls Ollama again with schema + values + user text; expects **only** updated values JSON.
+5. Bot validates against the schema, applies changes (with retries when output is invalid), returns JSON.
+
+---
+
+### Quick start
+
+**Prerequisites**
+
+- **Docker** with Compose v2 (`docker compose`)
+- **Ollama** on the host with a pulled model, e.g.:
+
+```bash
+ollama pull llama3.2
+```
+
+**Run** (from the repo root):
 
 ```bash
 docker compose up --build -d
 ```
 
-This will start:
+**Configure Ollama (optional)** — Compose passes through environment (see `docker-compose.yml`):
 
-- `schema-server` (JSON Schemas)
-- `values-server` (current configuration values)
-- `bot-server` (public API you call)
+| Variable             | Default                              | Meaning                          |
+| -------------------- | ------------------------------------ | -------------------------------- |
+| `OLLAMA_URL`         | `http://host.docker.internal:11434`  | Ollama API (host machine)         |
+| `LLM_MODEL`          | `llama3.2`                          | Model name in Ollama              |
+| `OLLAMA_NUM_PREDICT` | `4096`                              | Max tokens for completion         |
 
-By default, the Bot Service expects Ollama on `http://host.docker.internal:11434`. You can change this via the `OLLAMA_URL` environment variable.
+`extra_hosts: host.docker.internal:host-gateway` is set so the bot container can reach Ollama on Linux as well as macOS/Windows.
 
-### Try an example request
+**Try it**
 
 ```bash
 curl -X POST http://localhost:5003/message \
@@ -69,237 +109,195 @@ curl -X POST http://localhost:5003/message \
   -d '{"input": "set tournament service memory to 1024mb"}'
 ```
 
-The response is the updated configuration JSON for the `tournament` application.
+More examples:
 
----
+```bash
+curl -X POST http://localhost:5003/message \
+  -H "Content-Type: application/json" \
+  -d '{"input": "set GAME_NAME env to toyblast for matchmaking service"}'
 
-## High-Level Architecture
-
-The system is composed of **three independent services**, each with a single responsibility:
-
-### 1. Schema Service
-- Serves **JSON Schemas** for applications
-- Schemas define the **allowed structure, fields, and constraints**
-- Each application is identified by a `app_name`
-
-### 2. Values Service
-- Serves the **current configuration values** for applications
-- Values are stored separately from schemas
-- Uses the same `app_name` to link values to schemas
-
-### 3. Bot Service
-- Accepts **natural language user input**
-- Uses a **local LLM (via Ollama)** to:
-  - Identify which application the user wants to modify
-  - Understand the intended change
-  - Apply the change **safely and structurally** to the values JSON
-- Returns the **updated values JSON** to the caller
-
----
-
-## Request Flow
-
-1. **User sends a message** to the Bot Service:
-   ```json
-   { "input": "set tournament service memory to 1024mb" }
-   ```
-
-2. **Bot Service sends the user input to the AI model**
-   - Expects **only the application name** (or application identifier) as output
-   - No schema or values are provided at this stage
-
-3. **Bot Service fetches application data**:
-   - JSON Schema from the **Schema Service**
-   - Current values JSON from the **Values Service**
-
-4. **Bot Service sends a second request to the AI model**, providing:
-   - The original user input
-   - The application JSON Schema
-   - The current values JSON
-   - Expects the AI model to **respond only with the modified values JSON**
-
-5. **AI model produces**:
-   - A modified values JSON that:
-     - Strictly follows the provided schema
-     - Preserves all unrelated fields
-     - Applies only the requested changes
-
-6. **Bot Service returns**:
-   - The updated values JSON as the response
-
----
-
-## Services
-
-### 1. Schema Service
-
-* Create a schema service that provides a JSON Schema for a given application.
-
-  - **request:**
-    ```
-        GET /{app_name}
-    ```
-
-  - **responses:**
-    ```
-        200 OK -> { json_schema }
-        404 Not Found
-        500 Internal Server Error
-    ```
-
-  - **arguments:**
-    ```
-        --schema-dir (default /data/schemas)
-        --listen host:port (default "0.0.0.0:5001")
-    ```
-
-### 2. Values Service
-
-* Create a values service that provides the current values for a given application.
-
-  - **request:**
-    ```
-        GET /{app_name}
-    ```
-
-  - **responses:**
-    ```
-        200 OK -> { json_values }
-        404 Not Found
-        500 Internal Server Error
-    ```
-
-  - **arguments:**
-    ```
-        --schema-dir (default /data/values)
-        --listen host:port (default "0.0.0.0:5002")
-    ```
-
-### 3. Bot Service
-
-* Create a bot service that accepts a user message and returns an updated values JSON.
-  - Receives the user message
-  - Identifies which application the user wants to modify using an AI model
-  - Retrieves the application schema from the schema service
-  - Retrieves the current application values from the values service
-  - Provides the schema and values to the AI model to apply the requested changes
-  - Returns the updated values JSON
-
-
-  - **request:**
-    ```
-        POST /message
-           { input : "{ user_input }"}
-    ```
-
-  - **response:**
-    ```
-        200 OK -> { new_values } as json
-        404 Not Found
-        500 Internal Server Error
-    ```
-
-  - **arguments:**
-    ```
-        --listen host:port (default "0.0.0.0:5003")
-    ```
-
-  - **example user inputs**:
-    ```
-        . set tournament service memory to 1024mb
-        . set GAME_NAME env to toyblast for matchmaking service
-        . lower cpu limit of chat service to %80
-    ```
-
----
-
-## Expectations from the Finished Project
-
-### How to Run
-
--   Provide a `docker-compose.yml` file that builds and runs all
-    services.
-
--   The entire system should start with a single command:
-
-    ```
-    docker compose up
-    ```
-
--   After running the command:
-
-    -   All services should be up and ready to serve requests.
-    -   Services should automatically restart if any of them goes down.
-
--  Run commands like below to test it.
-   ```
-   curl -X POST http://localhost:5003/message      -H "Content-Type: application/json"      -d '{"input": "set tournament service memory to 1024mb"}'
-
-   curl -X POST http://localhost:5003/message      -H "Content-Type: application/json"      -d '{"input": "set GAME_NAME env to toyblast for matchmaking service"}'
-
-   curl -X POST http://localhost:5003/message      -H "Content-Type: application/json"      -d '{"input": "lower cpu limit of chat service to %80"}'
-   ```
-
-------------------------------------------------------------------------
-
-### Implementation Requirements
-
--   All services must be implemented in **Python**.
--   Selected AI/LLM model must run **locally** using **Ollama**.
--   No external or cloud-based LLM services should be used.
--   The selected LLM should be:
-    -   Local-machine friendly
-    -   Suitable for generating configuration updates programmatically
--   LLM responses must be **validated against the corresponding JSON
-    Schema**.
--   **The chosen model and prompting strategy should ensure reliable and
-    correct outputs.**
-
-------------------------------------------------------------------------
-
-### Folder Structure
-
-The finished project is expected to follow this folder structure:
-```
-  ├── bot-server
-  │   └── Dockerfile
-  ├── data
-  │   ├── schemas
-  │   │   ├── chat.schema.json
-  │   │   ├── matchmaking.schema.json
-  │   │   └── tournament.schema.json
-  │   └── values
-  │       ├── chat.value.json
-  │       ├── matchmaking.value.json
-  │       └── tournament.value.json
-  ├── docker-compose.yml
-  ├── INTERN.md
-  ├── README.md
-  ├── schema-server
-  │   └── Dockerfile
-  └── values-server
-      └── Dockerfile
+curl -X POST http://localhost:5003/message \
+  -H "Content-Type: application/json" \
+  -d '{"input": "lower cpu limit of chat service to %80"}'
 ```
 
--   Each service should be containerized and independently runnable.
--   Shared data (schemas and values) should be placed under the `data`
-    directory.
+---
 
-------------------------------------------------------------------------
+### HTTP API (reference)
 
-## Documentation Requirements
+**Bot service (host)**
 
--   The finished project must include a **INTERN.md** file.
--   The INTERN.md file should clearly explain:
-    -   Design decisions (e.g. why a specific LLM model was chosen)
-    -   How the system is implemented and structured
-    -   How services communicate with each other
-    -   The end-to-end flow of a user request
--   Focus on **reasoning and trade-offs**, not just code.
+| Method | Path       | Body                                  | Success                    |
+| ------ | ---------- | ------------------------------------- | -------------------------- |
+| `POST` | `/message` | `{ "input": "<natural language>" }` | `200` + updated values JSON |
 
-------------------------------------------------------------------------
+**Schema & values (in-network; optional host exposure)** — Both expose `GET /health` and `GET /{app_name}` (e.g. `tournament`, `chat`, `matchmaking`). In the default Compose file, **ports 5001/5002 are not mapped** to the host—use `docker compose exec` or temporarily uncomment `ports` in `docker-compose.yml` for debugging.
 
-## Notes
+---
 
--   Simplicity and clarity are preferred over over-engineering.
--   Reasonable assumptions are allowed as long as they are documented.
+### Repository layout
+
+```text
+├── bot-server/          # Flask, Ollama client, orchestration
+├── schema-server/       # Serves *.schema.json
+├── values-server/       # Serves *.value.json
+├── data/
+│   ├── schemas/         # chat, matchmaking, tournament schemas
+│   └── values/          # current values per app
+├── docker-compose.yml
+├── INTERN.md            # Design decisions and deep dive
+└── README.md
+```
+
+---
+
+### Case requirements (summary)
+
+The original brief asked for: all services in **Python**, **only local** LLM via **Ollama**, outputs **validated** against each app’s **JSON Schema**, and everything runnable with **`docker compose up`**. This repository implements that; extended reasoning lives in **`INTERN.md`**.
+
+**[↑ Back to top](#top)**
+
+---
+
+<a id="turkce"></a>
+
+## Türkçe
+
+**Doğal dil → şemayla doğrulanmış yapılandırma güncellemeleri.** Düz İngilizce yönergeleri JSON yapılandırma değişikliklerine eşleyen küçük bir **Python mikro servis** yığını: **JSON Schema** doğrulaması ve **Ollama üzerinden yerel LLM** (bulut modelleri yok).
+
+Başlangıçta **Peak Games staj başvurusu vaka çalışması** olarak hazırlandı; **Flask**, **Docker Compose**, **Ollama** ve **şemaya dayalı yapılandırma** ile çalışmayı göstermek için yayımlandı.
+
+---
+
+### Ne isteyebilirsiniz?
+
+Botun anladığı örnekler:
+
+- “set tournament service memory to 1024mb”
+- “set GAME_NAME env to toyblast for matchmaking service”
+- “lower cpu limit of chat service to %80”
+
+**Bot**, hangi uygulamayı (`chat`, `tournament`, `matchmaking`) kastettiğinizi çıkarır, o uygulamanın **şemasını** ve **güncel değerlerini** yükler, LLM’den güncellenmiş değer belgesi ister, şemaya göre doğrular ve sonucu döner.
+
+---
+
+### Kısa yığın (stack)
+
+| Alan        | Tercihler                                                                 |
+| ----------- | ------------------------------------------------------------------------- |
+| Servisler   | Flask: `schema-server`, `values-server`, `bot-server`                     |
+| LLM         | Yerel **Ollama**; model yapılandırılabilir (varsayılan `llama3.2`)         |
+| Doğrulama   | LLM çıktısında **jsonschema**                                             |
+| Operasyon   | Servis başına Docker, iç Docker ağı, `restart: unless-stopped`            |
+| Kalite      | İstek başına loglama, sağlık uç noktaları, hatalı LLM çıktısında yeniden deneme |
+
+**Model seçimi, istemler ve ödünleşimler** için bkz. [`INTERN.md`](./INTERN.md).
+
+---
+
+### Mimari
+
+Üç servis, her biri tek sorumluluk:
+
+| Servis            | Rol                                                                          |
+| ----------------- | ---------------------------------------------------------------------------- |
+| **schema-server** | `app_name` başına JSON Schema sunar (`GET /{app_name}`)                      |
+| **values-server** | `app_name` başına güncel değer JSON’u sunar (`GET /{app_name}`)             |
+| **bot-server**    | Genel API: doğal dil girişi → doğrulanmış güncel JSON çıkışı (`POST /message`) |
+
+Yalnızca **bot-server** host’ta port açar (**5003**). Şema ve değerler, bot tarafından Compose ağı üzerinden erişilir.
+
+---
+
+### İstek akışı
+
+1. İstemci **bot-server** `POST /message` adresine `{ "input": "…" }` gönderir.
+2. Bot, **hedef uygulama adını** belirlemek için Ollama’yı çağırır.
+3. Bot diğer iki servisten **şema** ve **değerleri** alır.
+4. Bot, şema + değerler + kullanıcı metniyle Ollama’yı tekrar çağırır; yanıtta **yalnızca** güncellenmiş değer JSON’u beklenir.
+5. Bot çıktıyı şemaya göre doğrular, (geçersiz çıktıda yeniden denemelerle) değişiklikleri uygular, JSON döner.
+
+---
+
+### Hızlı başlangıç
+
+**Gereksinimler**
+
+- Compose v2 ile **Docker** (`docker compose`)
+- Model çekilmiş **Ollama** (host’ta), ör.:
+
+```bash
+ollama pull llama3.2
+```
+
+**Çalıştırma** (depo kökünden):
+
+```bash
+docker compose up --build -d
+```
+
+**Ollama yapılandırması (isteğe bağlı)** — Compose ortam değişkenlerini geçirir (ayrıntı `docker-compose.yml`):
+
+| Değişken              | Varsayılan                           | Anlamı                           |
+| --------------------- | ------------------------------------ | -------------------------------- |
+| `OLLAMA_URL`          | `http://host.docker.internal:11434`  | Ollama API (host makine)         |
+| `LLM_MODEL`           | `llama3.2`                          | Ollama’daki model adı            |
+| `OLLAMA_NUM_PREDICT`  | `4096`                              | Tamamlama için maksimum token    |
+
+`extra_hosts: host.docker.internal:host-gateway` sayesinde bot konteyneri Ollama’ya Linux’ta da macOS/Windows’taki gibi ulaşabilir.
+
+**Deneme**
+
+```bash
+curl -X POST http://localhost:5003/message \
+  -H "Content-Type: application/json" \
+  -d '{"input": "set tournament service memory to 1024mb"}'
+```
+
+Diğer örnekler:
+
+```bash
+curl -X POST http://localhost:5003/message \
+  -H "Content-Type: application/json" \
+  -d '{"input": "set GAME_NAME env to toyblast for matchmaking service"}'
+
+curl -X POST http://localhost:5003/message \
+  -H "Content-Type: application/json" \
+  -d '{"input": "lower cpu limit of chat service to %80"}'
+```
+
+---
+
+### HTTP API (özet)
+
+**Bot servisi (host)**
+
+| Metod  | Yol        | Gövde                                 | Başarı                     |
+| ------ | ---------- | ------------------------------------- | -------------------------- |
+| `POST` | `/message` | `{ "input": "<doğal dil metni>" }`   | `200` + güncellenmiş değer JSON’u |
+
+**Şema ve değerler (ağ içi; host’a açma isteğe bağlı)** — İkisi de `GET /health` ve `GET /{app_name}` sunar (ör. `tournament`, `chat`, `matchmaking`). Varsayılan Compose’ta **5001/5002 portları host’a map edilmez**—hata ayıklama için `docker compose exec` kullanın veya `docker-compose.yml` içinde `ports` satırlarını geçici açın.
+
+---
+
+### Depo yapısı
+
+```text
+├── bot-server/          # Flask, Ollama istemcisi, orkestrasyon
+├── schema-server/       # *.schema.json sunar
+├── values-server/       # *.value.json sunar
+├── data/
+│   ├── schemas/         # chat, matchmaking, tournament şemaları
+│   └── values/          # uygulama başına güncel değerler
+├── docker-compose.yml
+├── INTERN.md            # Tasarım kararları ve ayrıntılı anlatım
+└── README.md
+```
+
+---
+
+### Vaka gereksinimleri (özet)
+
+Orijinal özet: tüm servisler **Python**, LLM yalnızca **Ollama** ile **yerel**, çıktılar her uygulamanın **JSON Schema**’sına göre **doğrulanmış** ve her şey **`docker compose up`** ile çalışır. Bu depo bunu uygular; genişletilmiş açıklamalar **`INTERN.md`** dosyasındadır.
+
+**[↑ Başa dön](#top)**
