@@ -4,6 +4,13 @@
 
 # AI-Assisted Application Configuration
 
+### Yapay destekli uygulama yapılandırması · AI-assisted app configuration
+
+<p>
+  <b>EN</b> — <i>Plain-English instructions → JSON config changes validated with JSON Schema; local LLM (Ollama), no cloud.</i><br>
+  <b>TR</b> — <i>İngilizce yönergeler → JSON şemayla doğrulanan yapılandırma; yerel LLM (Ollama), bulut yok.</i>
+</p>
+
 **Dil &nbsp;·&nbsp; Language:** [**English**](#english) &nbsp;|&nbsp; [**Türkçe**](#turkce)
 
 [![](https://img.shields.io/badge/stack-Flask-0d1117?logo=flask)](https://flask.palletsprojects.com/) [![](https://img.shields.io/badge/LLM-Ollama-0d1117?logo=ollama)](https://ollama.com/) [![](https://img.shields.io/badge/orchestration-Docker%20Compose-0d1117?logo=docker)](https://docs.docker.com/compose/) [![](https://img.shields.io/badge/validation-JSON%20Schema-0d1117)](https://json-schema.org/)
